@@ -16,11 +16,12 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.test.redirectTestOutputToFile>true</maven.test.redirectTestOutputToFile>
+    <wagon.s3.version>1.1.10</wagon.s3.version>
 	</properties>
 	<scm>
-		<connection>scm:git:git://github.com/sakaiproject/solr.git</connection>
-		<developerConnection>scm:git:git@github.com:sakaiproject/solr.git</developerConnection>
-		<url>http://github.com/sakaiproject/solr/</url>
+		<connection>scm:git:git://github.com/rSmart/solr.git</connection>
+		<developerConnection>scm:git:git@github.com:rSmart/solr.git</developerConnection>
+		<url>http://github.com/rSmart/solr/</url>
 	</scm>
 	<profiles>
 		<profile>
@@ -144,6 +145,11 @@
 				<artifactId>wagon-ssh</artifactId>
 				<version>2.1</version>
 			</extension>
+      <extension>
+        <groupId>org.kuali.maven.wagons</groupId>
+        <artifactId>maven-s3-wagon</artifactId>
+        <version>${wagon.s3.version}</version>
+      </extension>
 		</extensions>
 		<plugins>
 			<plugin>
@@ -437,25 +443,27 @@
 	<!-- ====================================================================== -->
 	<distributionManagement>
 		<downloadUrl>http://source.sakaiproject.org/maven2/</downloadUrl>
-		<snapshotRepository>
-			<uniqueVersion>false</uniqueVersion>
-			<id>sakai-maven-snapshots-scp</id>
-			<name>Sakai snapshot Repo</name>
-			<url>scp://source.sakaiproject.org/var/www/html/maven2-snapshots</url>
-			<layout>default</layout>
-		</snapshotRepository>
-		<repository>
-			<uniqueVersion>false</uniqueVersion>
-			<id>sakai-maven2-scp</id>
-			<name>Sakai maven2 repository</name>
-			<url>scp://source.sakaiproject.org/var/www/html/maven2</url>
-			<layout>default</layout>
-		</repository>
+    <snapshotRepository>
+       <uniqueVersion>false</uniqueVersion>
+       <id>rsmart.snapshot.repo</id>
+       <name>rsmart snapshot repository</name>
+       <url>s3://rsmart-dev/artifacts/maven/snapshot</url>
+       <layout>default</layout>
+    </snapshotRepository>
+    <repository>
+      <uniqueVersion>false</uniqueVersion>
+      <id>rsmart.release.repo</id>
+      <name>rsmart release repository</name>
+      <url>s3://rsmart-dev/artifacts/maven/release</url>
+      <layout>default</layout>
+    </repository>
+    <!--
 		<site>
 			<id>sakai-site</id>
 			<name>Sakai release Site</name>
 			<url>scp://source.sakaiproject.org/var/www/html/release/nakamura/${project.version}</url>
 		</site>
+  	-->
 	</distributionManagement>
 	<!-- these repos are required due to Sakai OAE depedencies and and a Solr 
 		timestamped release. -->
