@@ -1,20 +1,3 @@
-/**
- * Licensed to the Sakai Foundation (SF) under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. The SF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- */
 package org.sakaiproject.nakamura.solr;
 
 import java.util.Collection;
@@ -112,22 +95,24 @@ public class SparseIndexingServiceImpl implements IndexingHandler,
         Collection<SolrInputDocument> docs = getHandler(repositorySession, path)
             .getDocuments(repositorySession, event);
         List<SolrInputDocument> outputDocs = Lists.newArrayList();
-        for (SolrInputDocument doc : docs) {
-          for (String name : doc.getFieldNames()) {
-            // loop through the fields of the returned docs to make sure they contain
-            // atleast 1 field that is not a system property. this is not to filter out
-            // any system properties but to make sure there are more things to index than
-            // just system properties.
-            if (!SYSTEM_PROPERTIES.contains(name)) {
-              try {
-                addDefaultFields(doc, repositorySession);
-                outputDocs.add(doc);
-              } catch (StorageClientException e) {
-                LOGGER.warn("Failed to index {} cause: {} ", path, e.getMessage());
-              }
-              break;
-            }
-          }
+        if ( docs != null ) {
+	        for (SolrInputDocument doc : docs) {
+	          for (String name : doc.getFieldNames()) {
+	            // loop through the fields of the returned docs to make sure they contain
+	            // atleast 1 field that is not a system property. this is not to filter out
+	            // any system properties but to make sure there are more things to index than
+	            // just system properties.
+	            if (!SYSTEM_PROPERTIES.contains(name)) {
+	              try {
+	                addDefaultFields(doc, repositorySession);
+	                outputDocs.add(doc);
+	              } catch (StorageClientException e) {
+	                LOGGER.warn("Failed to index {} cause: {} ", path, e.getMessage());
+	              }
+	              break;
+	            }
+	          }
+	        }
         }
         return outputDocs;
       } else {

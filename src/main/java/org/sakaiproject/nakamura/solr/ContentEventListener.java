@@ -1,20 +1,3 @@
-/**
- * Licensed to the Sakai Foundation (SF) under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. The SF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- */
 package org.sakaiproject.nakamura.solr;
 
 import java.io.IOException;
@@ -177,6 +160,7 @@ public class ContentEventListener implements EventHandler, TopicIndexer,
 
 		}
 		List<QueueManager> qmlist = Lists.newArrayList(qm.values());
+		// sort the queues into ascending order of delay compare defined as ({x,y} so that compare(x,y) <= 0)
 		Collections.sort(qmlist, new Comparator<QueueManager>() {
 			public int compare(QueueManager o1, QueueManager o2) {
 				return (int) (o1.batchDelay - o2.batchDelay);
@@ -222,21 +206,27 @@ public class ContentEventListener implements EventHandler, TopicIndexer,
 					}
 				}
 				QueueManager q = null;
-				for (QueueManager qm : queues) {
-					if (ttl < qm.batchDelay) {
-						if (q == null) {
-							LOGGER.info("Unable to satisfy TTL of {} on event {} ",
-									ttl, event);
-						} else {
+				// queues is ordered by ascending ttl, so the fastest queue is queues[0],
+				// if the ttl is less that that, we can't satisfy it, so we will put it
+				// in the fastest queue
+				if ( ttl < queues[0].batchDelay ) {
+					LOGGER.warn("Unable to satisfy TTL of {} on event {}, posting to the highest priority queue. " +
+							"If this message is logged a lot please adjust the queues or change the event ttl to something that can be satisfied. " +
+							"Filling the highest priority queue is counter productive. ",
+							ttl, event);
+					queues[0].saveEvent(event);					
+				} else {
+					for (QueueManager qm : queues) {
+						if (ttl < qm.batchDelay) {
 							q.saveEvent(event);
 							q = null;
 							break;
 						}
+						q = qm;
 					}
-					q = qm;
-				}
-				if (q != null) {
-					q.saveEvent(event);
+					if (q != null) {
+						q.saveEvent(event);
+					}
 				}
 			} catch (IOException e) {
 				LOGGER.warn(e.getMessage(), e);
