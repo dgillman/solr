@@ -311,6 +311,15 @@
         </plugin>
       </plugins>
     </pluginManagement>
+<!--        <testResources>
+          <testResource>
+            <filtering>false</filtering>
+            <directory>${basedir}/src/test/resources</directory>
+            <includes>
+              <include>**/*</include>
+            </includes>
+          </testResource>
+        </testResources>-->
 	</build>
 	<dependencies>
 
