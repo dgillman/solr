@@ -50,6 +50,9 @@ public class QueueManagerTest {
   protected IndexingHandler indexingHandler;
   protected SolrServer server, serverSpy;
 
+  /**
+   * A simple IndexingHandler that produces very simple SolrInputDocuments
+   */
   class TestIndexingHandler implements IndexingHandler {
 
     @Override
@@ -73,23 +76,28 @@ public class QueueManagerTest {
       return null;
     }
   }
+
   @Before
   public void setupQueueManager() throws Exception {
+
+    // configure a Solr server using config files from test/resources
     CoreContainer container = new CoreContainer();
+    // these config files are *not* production files - we are testing QueueManager, not the schema
     SolrConfig config = new SolrConfig(".", "target/test-classes/solrconfig.xml", null);
     InputStream is = new FileInputStream("target/test-classes/schema.xml");
     InputSource iSource = new InputSource(is);
     IndexSchema schema = new IndexSchema(config, "test", iSource);
-    CoreDescriptor descriptor = new CoreDescriptor(container,
-      "test", "target/queueManagerTest/solr");
+    CoreDescriptor descriptor = new CoreDescriptor(container, "test", "target/queueManagerTest/solr");
     SolrCore core = new SolrCore("test", "target/queueManagerTest/solr/data", config, schema, descriptor);
 
     container.register("test", core, false);
 
     server = new EmbeddedSolrServer(container, "test");
 
+    // create a Mockito Spy object so we can intercept calls to the SolrServer to alter behavior as needed
     serverSpy = spy(server);
 
+    // wire up all the Mocks needed by QueueManager
     qMgrDrvr = mock(QueueManagerDriver.class);
     solrServerService = mock(SolrServerService.class);
     indexingHandler = new TestIndexingHandler();
@@ -112,6 +120,9 @@ public class QueueManagerTest {
     qMgr = new QueueManager(qMgrDrvr, "target/queueManagerTest/indexQueues", "testQueue", true, 10, 5000);
   }
 
+  /**
+   * provide a mix-in interface for determining how many times a method was called
+   */
   interface CallCountingAnswer extends Answer {
     int getCallCount();
   }
@@ -120,6 +131,11 @@ public class QueueManagerTest {
 
   }
 
+  /**
+   * generate a number of events for indexing
+   * @param num
+   * @throws IOException
+   */
   protected void fireEvents (int num) throws IOException {
     Event indexEvent = null;
 
@@ -133,10 +149,10 @@ public class QueueManagerTest {
     }
   }
 
-  protected void stopOnCount (CallCountingAnswer answer,
   @Test
   public void testEventsPersistedAcrossConnectException() throws Exception {
 
+    // final reference to be used within anonymous inner classes
     final QueueManager qm = qMgr;
 
     /*
@@ -164,23 +180,29 @@ public class QueueManagerTest {
       }
     };
 
-    // register the addDocsAnswer callback
+    // register the addDocsAnswer callback to handle any SolrServer.add(...) calls
     doAnswer(addDocsAnswer).when(serverSpy).add(any(Collection.class));
 
+    // load up 10 events
     fireEvents(10);
 
+    // create a thread that will stop QueueManager after SolrServer.add(...) has been called 10 times
     (new Thread (new Runnable () {
 
       @Override
       public void run() {
-        System.out.println("running stopper");
-        while (addDocsAnswer.getCallCount() < 11) {
-          System.out.println("call count: " + addDocsAnswer.getCallCount());
-          try {
-            Thread.sleep(50);
-          } catch (InterruptedException e) {
+        int internalCount = 0;
 
+        while (addDocsAnswer.getCallCount() < 11 && internalCount < 20) {
+          try {
+            Thread.sleep(500);
+          } catch (InterruptedException e) {
           }
+          internalCount++;
+        }
+
+        if (internalCount >= 20) {
+          fail("QueueManager did not finish processing - test timed out instead. Increase max loop count for test if this is not an error");
         }
         try {
           qm.stop();
@@ -189,17 +211,20 @@ public class QueueManagerTest {
         }
       }
     })).start();
+
+    // start the QueueManager
     qm.start();
+
+    // wait until the QueueManager is stopped
     qm.getQueueDispatcher().join();
 
+    // the actual test: did all 10 issues get committed to Solr?
     ModifiableSolrParams params = new ModifiableSolrParams();
-
     params.set("q","*:*");
 
     QueryResponse response = server.query(params);
 
     int size = response.getResults().size();
-
     assertEquals (10, size);
   }
 }
