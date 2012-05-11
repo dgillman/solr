@@ -2,6 +2,7 @@ package org.sakaiproject.nakamura.solr;
 
 import static org.junit.Assert.*;
 
+import com.google.common.collect.ImmutableList;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.SolrInputField;
 import org.junit.Before;
@@ -56,7 +57,7 @@ public class SparseIndexingServiceImplTest {
 
     public void assertContents(String correctTopics[]) throws Exception {
       if (correctTopics == null || correctTopics.length == 0) {
-        assertTrue (topics.isEmpty());
+        assertTrue(topics.isEmpty());
         return;
       }
 
@@ -343,5 +344,32 @@ public class SparseIndexingServiceImplTest {
     Event event = new Event(StoreListener.TOPIC_BASE + "authorizables/" + StoreListener.ADDED_TOPIC, props);
 
     assertEquals(50, sisi.getTtl(event));
+  }
+
+  @Test
+  public void testGetDeleteQueries() throws Exception {
+    sisi.addHandler ("testType", new IndexingHandler() {
+      @Override
+      public Collection<SolrInputDocument> getDocuments(RepositorySession repositorySession, Event event) {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+      }
+
+      @Override
+      public Collection<String> getDeleteQueries(RepositorySession respositorySession, Event event) {
+        return new ImmutableList.Builder<String>().add("testPath").build();
+      }
+    });
+
+    Dictionary props = new Hashtable();
+
+    props.put("path", "testPath");
+    props.put("resourceType", "testType");
+    Event event = new Event(StoreListener.TOPIC_BASE + "authorizables/" + StoreListener.DELETE_TOPIC, props);
+
+    Collection<String> queries = sisi.getDeleteQueries(null, event);
+
+    assertNotNull(queries);
+    assertEquals(1, queries.size());
+    assertTrue(queries.contains("testPath"));
   }
 }
