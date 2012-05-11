@@ -56,7 +56,7 @@ public class SparseIndexingServiceImplTest {
 
     public void assertContents(String correctTopics[]) throws Exception {
       if (correctTopics == null || correctTopics.length == 0) {
-        assert (topics.isEmpty());
+        assertTrue (topics.isEmpty());
         return;
       }
 
@@ -143,7 +143,7 @@ public class SparseIndexingServiceImplTest {
     // try with empty string
     String emptyString = "";
     tti = activate(sisi, emptyString);
-    tti.assertContents(new String[0]);
+    tti.assertContents(SPARSE_198_STOPGAP());
     sisi.deactivate(null);
     tti.assertContents(null);
     tti.clear();
