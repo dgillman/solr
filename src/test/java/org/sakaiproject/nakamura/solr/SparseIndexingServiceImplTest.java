@@ -244,7 +244,6 @@ public class SparseIndexingServiceImplTest {
 
   @Test
   public void testDocsWithOnlySystemPropertiesFilteredOut() throws Exception {
-
     // prep sparse mocks
     Session session = prepSparseSession();
     Map<String, Object> contentProperties = new HashMap<String, Object>();
@@ -308,6 +307,46 @@ public class SparseIndexingServiceImplTest {
 
     SolrInputField extraField = doc.getField("extraField");
     assertEquals("extraFieldValue", extraField.getValue());
+  }
+
+  @Test
+  public void testGetResourceTypeFromRepository() throws Exception {
+    // prep sparse mocks
+    Session session = prepSparseSession();
+    Map<String, Object> contentProperties = new HashMap<String, Object>();
+
+    contentProperties.put(SparseIndexingServiceImpl.SLING_RESOURCE_TYPE, "testType");
+    Content parent = new Content("parent", contentProperties),
+       content = new Content("parent/testPath", new HashMap<String, Object>());
+
+    addContent(session, parent);
+    addContent(session, content);
+
+    AccessControlManager acm = session.getAccessControlManager();
+    final String principals[] = new String[] { "testPrincipal1", "testPrincipal2" };
+
+    when(acm.findPrincipals(anyString(), anyString(), anyInt(), eq(true))).thenReturn(principals);
+
+    SolrInputDocument sid = new SolrInputDocument();
+    sid.setField(IndexingHandler.FIELD_ID, "testID");
+    sid.setField(IndexingHandler._DOC_SOURCE_OBJECT, content);
+    sid.setField("extraField", "extraFieldValue");
+
+    HashSet<SolrInputDocument> docs = new HashSet<SolrInputDocument>();
+    docs.add(sid);
+
+    TestIndexingHandler tih = new TestIndexingHandler(docs, null);
+    sisi.addHandler("testType", tih);
+
+    TestRepositorySession repoSession = new TestRepositorySession(session);
+    Dictionary props = new Hashtable();
+
+    props.put("path", "parent/testPath");
+    Event event = new Event(StoreListener.TOPIC_BASE + "authorizables/" + StoreListener.ADDED_TOPIC, props);
+
+    Collection<SolrInputDocument> results = sisi.getDocuments(repoSession, event);
+
+    assertTrue(results.contains(sid));
   }
 
   class TestQoSIndexingHandler implements IndexingHandler, QoSIndexHandler {
