@@ -332,10 +332,16 @@ public class SparseIndexingServiceImplTest {
     }
   }
 
+  @Test
   public void testTtlReturnsAppropriateValue() throws Exception {
-    sisi.addHandler("testTopic", new TestQoSIndexingHandler(51));
-    sisi.addHandler("testTopic", new TestQoSIndexingHandler(50));
+    sisi.addHandler("testType", new TestQoSIndexingHandler(50));
 
-    assertEquals(50, sisi.getTtl(new Event("testTopic", null)));
+    Dictionary props = new Hashtable();
+
+    props.put("path", "testPath");
+    props.put("resourceType", "testType");
+    Event event = new Event(StoreListener.TOPIC_BASE + "authorizables/" + StoreListener.ADDED_TOPIC, props);
+
+    assertEquals(50, sisi.getTtl(event));
   }
 }
