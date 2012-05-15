@@ -28,15 +28,14 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Map;
 
-/**
- * User: duffy
- * Date: 5/10/12
- * Time: 12:04 PM
- */
 public class SparseIndexingServiceImplTest {
 
   SparseIndexingServiceImpl sisi = null;
 
+  /**
+   * Simply adds topics to a HashSet whose contents can be checked to ensure they match
+   * expected results
+   */
   class TestTopicIndexer implements TopicIndexer {
 
     private HashSet<String> topics = new HashSet<String>();
@@ -68,6 +67,9 @@ public class SparseIndexingServiceImplTest {
     }
   }
 
+  /**
+   * creates a RepositorySession implementation for mocking
+   */
   class TestRepositorySession implements RepositorySession {
     Session sparseSession = null;
 
@@ -96,6 +98,13 @@ public class SparseIndexingServiceImplTest {
     sisi = new SparseIndexingServiceImpl();
   }
 
+  /**
+   * creates the SparseIndexingServiceImpl for testing with a set of topics
+   * @param sisi
+   * @param topics
+   * @return
+   * @throws Exception
+   */
   private TestTopicIndexer activate (SparseIndexingServiceImpl sisi, Object topics) throws Exception {
     TestTopicIndexer testTopicIndexer = new TestTopicIndexer();
 
@@ -205,6 +214,9 @@ public class SparseIndexingServiceImplTest {
     tti.clear();
   }
 
+  /**
+   * allows a test to create an IndexingHandler with a fixed set of documents and delete queries
+   */
   class TestIndexingHandler implements IndexingHandler {
 
     Collection<SolrInputDocument> docs;
@@ -226,6 +238,11 @@ public class SparseIndexingServiceImplTest {
     }
   }
 
+  /**
+   * mocks a SparseSession
+   * @return
+   * @throws Exception
+   */
   private final Session prepSparseSession() throws Exception {
     Session session = mock(Session.class);
     ContentManager contentManager = mock(ContentManager.class);
@@ -237,15 +254,29 @@ public class SparseIndexingServiceImplTest {
     return session;
   }
 
+  /**
+   * mocks a piece of content in sparse
+   *
+   * @param session
+   * @param content
+   * @throws Exception
+   */
   private final void addContent(Session session, Content content) throws Exception {
     final ContentManager contentManager = session.getContentManager();
     when(contentManager.get(eq(content.getPath()))).thenReturn(content);
   }
 
+  /**
+   * SparseIndexingServiceImpl is designed to omit SolrInputDocuments with no useful data.
+   * This test exercises that function and ensures that default fields are added.
+   * @throws Exception
+   */
   @Test
   public void testDocsWithOnlySystemPropertiesFilteredOut() throws Exception {
     // prep sparse mocks
     Session session = prepSparseSession();
+
+    //create a piece of content at the path "testPath"
     Map<String, Object> contentProperties = new HashMap<String, Object>();
 
     contentProperties.put(SparseIndexingServiceImpl.SLING_RESOURCE_TYPE, "testType");
@@ -253,40 +284,54 @@ public class SparseIndexingServiceImplTest {
 
     addContent(session, content);
 
+    //cause the mock AccessControlManager to always return predictable principals when SPSI is finding readers for
+    // the content item
     AccessControlManager acm = session.getAccessControlManager();
     final String principals[] = new String[] { "testPrincipal1", "testPrincipal2" };
 
     when(acm.findPrincipals(anyString(), anyString(), anyInt(), eq(true))).thenReturn(principals);
 
+    // this document only contains system properties - it should not be passed to Solr
     SolrInputDocument onlySystemProperties = new SolrInputDocument();
     onlySystemProperties.setField(IndexingHandler.FIELD_ID, "testID");
 
+    // this document contains an extra field - it should be passed to Solr
     SolrInputDocument withExtraProperty = new SolrInputDocument();
     withExtraProperty.setField(IndexingHandler.FIELD_ID, "testID");
+    // this field is added to work around SPARSE-190; without it the document would be ignored
     withExtraProperty.setField(IndexingHandler._DOC_SOURCE_OBJECT, content);
     withExtraProperty.setField("extraField", "extraFieldValue");
 
+    // setup the indexing handler to return the system-property only doc
     HashSet<SolrInputDocument> docs = new HashSet<SolrInputDocument>();
     docs.add(onlySystemProperties);
 
+    // create a IndexingHandler to return the test docs
     TestIndexingHandler tih = new TestIndexingHandler(docs, null);
     sisi.addHandler("testType", tih);
 
+    // wrap the mock sparse Session in the RepositorySession interface expected by SISI
     TestRepositorySession repoSession = new TestRepositorySession(session);
-    Dictionary props = new Hashtable();
 
+    // create an added content event to be handed by the TestIndexingHandler
+    Dictionary props = new Hashtable();
     props.put("path", "testPath");
     props.put("resourceType", "testType");
     Event event = new Event(StoreListener.TOPIC_BASE + "authorizables/" + StoreListener.ADDED_TOPIC, props);
 
+    // verify that the document was omitted from indexing because it has only system properties
     assertTrue(sisi.getDocuments(repoSession, event).isEmpty());
 
+    // now add a document with an extra non-system property
     docs.add(withExtraProperty);
 
+    //test the getDocuments call
     Collection<SolrInputDocument> results = sisi.getDocuments(repoSession, event);
 
+    //verify that the document with non-system fields was passed through to Solr
     assertEquals(1, results.size());
 
+    // verify that the default properties were added to the SolrInputDocument
     SolrInputDocument doc = results.iterator().next();
 
     SolrInputField readerField = doc.getField(IndexingHandler.FIELD_READERS);
@@ -309,10 +354,20 @@ public class SparseIndexingServiceImplTest {
     assertEquals("extraFieldValue", extraField.getValue());
   }
 
+  /**
+   * If the Event which starts indexing does not have a resource type, the SISI will
+   * walk up the sparse content path until an ancestor with a resource type is found.
+   * This method tests that behavior by issuing an ADDED event for a piece of content
+   * whose parent has a resource type.
+   *
+   * @throws Exception
+   */
   @Test
   public void testGetResourceTypeFromRepository() throws Exception {
     // prep sparse mocks
     Session session = prepSparseSession();
+
+    //create two pieces of content in the mock sparse map: parent, and parent/testPath
     Map<String, Object> contentProperties = new HashMap<String, Object>();
 
     contentProperties.put(SparseIndexingServiceImpl.SLING_RESOURCE_TYPE, "testType");
@@ -322,33 +377,47 @@ public class SparseIndexingServiceImplTest {
     addContent(session, parent);
     addContent(session, content);
 
+    //cause the mock AccessControlManager to return predictable principals for the readers field
     AccessControlManager acm = session.getAccessControlManager();
     final String principals[] = new String[] { "testPrincipal1", "testPrincipal2" };
 
     when(acm.findPrincipals(anyString(), anyString(), anyInt(), eq(true))).thenReturn(principals);
 
+    //create a predictable SolrInputDocument that should be returned by the IndexingHandler
     SolrInputDocument sid = new SolrInputDocument();
     sid.setField(IndexingHandler.FIELD_ID, "testID");
     sid.setField(IndexingHandler._DOC_SOURCE_OBJECT, content);
     sid.setField("extraField", "extraFieldValue");
 
+    // create the test IndexingHandler and cause it to return the SolrInputDocument
     HashSet<SolrInputDocument> docs = new HashSet<SolrInputDocument>();
     docs.add(sid);
 
     TestIndexingHandler tih = new TestIndexingHandler(docs, null);
     sisi.addHandler("testType", tih);
 
+    // create a Repository Session
     TestRepositorySession repoSession = new TestRepositorySession(session);
+
+    // create a content ADDED event with no resourceType
     Dictionary props = new Hashtable();
 
     props.put("path", "parent/testPath");
     Event event = new Event(StoreListener.TOPIC_BASE + "authorizables/" + StoreListener.ADDED_TOPIC, props);
 
+    //execute the test call to getDocuments
     Collection<SolrInputDocument> results = sisi.getDocuments(repoSession, event);
 
+    // in order for sid to have returned the TestIndexingHandler must have been called
+    // it will only have been called if a resource Type of testType has been used for the lookup
+    // to obtain this resource type SISI will have had to walk up the content map from parent/testPath
+    // to parent
     assertTrue(results.contains(sid));
   }
 
+  /**
+   * An IndexingHanlder that returns a predictable TTL
+   */
   class TestQoSIndexingHandler implements IndexingHandler, QoSIndexHandler {
     int ttl = Integer.MAX_VALUE;
 
@@ -372,6 +441,10 @@ public class SparseIndexingServiceImplTest {
     }
   }
 
+  /**
+   * test that the TTL for an event is determined by the appropriate IndexingHandler
+   * @throws Exception
+   */
   @Test
   public void testTtlReturnsAppropriateValue() throws Exception {
     sisi.addHandler("testType", new TestQoSIndexingHandler(50));
@@ -385,6 +458,10 @@ public class SparseIndexingServiceImplTest {
     assertEquals(50, sisi.getTtl(event));
   }
 
+  /**
+   * test that the appropriate IndexingHandler is called in response to SISI.getDeleteQueries
+   * @throws Exception
+   */
   @Test
   public void testGetDeleteQueries() throws Exception {
     sisi.addHandler ("testType", new IndexingHandler() {
