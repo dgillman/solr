@@ -431,6 +431,19 @@
    -->
     <fieldtype name="geohash" class="solr.GeoHashField"/>
 
+   <!--
+       Sakai OAE field type for email searches. Splits on punctuation as well as
+       whitespace and treats result as phrase-search. Case-insensitive. Does not use stop-words.
+     -->
+    <fieldType name="text_punct_phrase" class="solr.TextField" positionIncrementGap="100" autoGeneratePhraseQueries="true">
+      <analyzer>
+        <tokenizer class="solr.PatternTokenizerFactory" pattern="[\p{Punct}\p{Space}]+"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.KeywordMarkerFilterFactory" protected="protwords.txt"/>
+        <filter class="solr.PorterStemFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
  </types>
 
 
@@ -492,12 +505,15 @@
    <field name="name" type="text_ci" indexed="true" stored="true" termVectors="true" />
    <field name="firstName" type="text" indexed="true" stored="true" />
    <field name="lastName" type="text" indexed="true" stored="true" />
-   <field name="email" type="text_ci" indexed="true" stored="true" />
-   <field name="newemail" type="text_ci" indexed="true" stored="true" />
+   <field name="email" type="text_punct_phrase" indexed="true" stored="true" />
+   <field name="newemail" type="text_punct_phrase" indexed="true" stored="true" />
    <field name="type" type="string" indexed="true" stored="true" termVectors="true" />
    <field name="group" type="string" indexed="true" stored="true" multiValued="true" />
    <field name="profile" type="text" indexed="true" stored="false" multiValued="true" />
    <field name="exclude" type="boolean" indexed="true" stored="false" />
+
+   <!-- dynamic field definition to hold any additional authentication IDs for a user -->
+   <dynamicField name="*_authnId" type="text_punct_phrase" indexed="true" stored="true" />
 
    <!-- sakai groups -->
    <field name="title" type="text" indexed="true" stored="true" termVectors="true" />
